@@ -19,6 +19,7 @@
 #ifndef TERMINALDISPLAY_HPP
 #define TERMINALDISPLAY_HPP
 
+#include <sstream>
 #include "terminalframebuffer.h"
 
 namespace Terminal {
@@ -26,7 +27,7 @@ namespace Terminal {
   class FrameState {
   public:
     int x, y;
-    std::string str;
+    std::ostringstream os;
 
     int cursor_x, cursor_y;
     Renditions current_rendition;
@@ -35,14 +36,10 @@ namespace Terminal {
 
     FrameState( const Framebuffer &s_last )
       : x(0), y(0),
-	str(), cursor_x(0), cursor_y(0), current_rendition( 0 ),
+	os(), cursor_x(0), cursor_y(0), current_rendition( 0 ),
 	last_frame( s_last )
     {
-      str.reserve( 1024 );
     }
-
-    void append( const char * s ) { str.append( s ); }
-    void appendstring( const std::string s ) { str.append( s ); }
 
     void append_silent_move( int y, int x );
   };

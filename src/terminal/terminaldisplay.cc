@@ -39,30 +39,29 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
 
   /* has bell been rung? */
   if ( f.get_bell_count() != frame.last_frame.get_bell_count() ) {
-    frame.append( "\x07" );
+    frame.os << '\x07';
   }
 
   /* has window title changed? */
   if ( (!initialized)
        || (f.get_window_title() != frame.last_frame.get_window_title()) ) {
       /* set window title */
-    frame.append( "\033]0;" );
+    frame.os << "\033]0;";
     const std::deque<wchar_t> &window_title( f.get_window_title() );
     for ( BOOST_AUTO( i, window_title.begin() );
 	  i != window_title.end();
 	  i++ ) {
       snprintf( tmp, 64, "%lc", *i );
-      frame.append( tmp );
+      frame.os << tmp;
     }
-    frame.append( "\033\\" );
+    frame.os << "\033\\";
   }
 
   /* has reverse video state changed? */
   if ( (!initialized)
        || (f.ds.reverse_video != frame.last_frame.ds.reverse_video) ) {
     /* set reverse video */
-    snprintf( tmp, 64, "\033[?5%c", (f.ds.reverse_video ? 'h' : 'l') );
-    frame.append( tmp );
+    frame.os << "\033[?5" << (f.ds.reverse_video ? 'h' : 'l');
   }
 
   /* has size changed? */
@@ -70,7 +69,7 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
        || (f.ds.get_width() != frame.last_frame.ds.get_width())
        || (f.ds.get_height() != frame.last_frame.ds.get_height()) ) {
     /* clear screen */
-    frame.append( "\033[0m\033[H\033[2J" );
+    frame.os << "\033[0m\033[H\033[2J";
     initialized = false;
     frame.cursor_x = frame.cursor_y = 0;
     frame.current_rendition = initial_rendition();
@@ -118,12 +117,12 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
 	}
 
 	if ( !(frame.current_rendition == initial_rendition()) ) {
-	  frame.append( "\033[0m" );
+	  frame.os << "\033[0m";
 	  frame.current_rendition = initial_rendition();
 	}
 
 	for ( int i = 0; i < lines_scrolled; i++ ) {
-	  frame.append( "\n" );
+	  frame.os << '\n';
 	}
 
 	for ( int i = 0; i < f.ds.get_height(); i++ ) {
@@ -168,8 +167,7 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
 	frame.last_frame.reset_cell( frame.last_frame.get_mutable_cell( frame.y, frame.x ) );
       }
 
-      snprintf( tmp, 64, "\033[%d;%dH\033[K", frame.y + 1, frame.x + 1 );
-      frame.append( tmp );
+      frame.os << "\033[" << frame.y + 1 << ';' << frame.x + 1 << "H\033[K";
       frame.cursor_x = frame.x;
 
       put_cell( initialized, frame, f );
@@ -180,9 +178,7 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
   if ( (!initialized)
        || (f.ds.get_cursor_row() != frame.cursor_y)
        || (f.ds.get_cursor_col() != frame.cursor_x) ) {
-    snprintf( tmp, 64, "\033[%d;%dH", f.ds.get_cursor_row() + 1,
-	      f.ds.get_cursor_col() + 1 );
-    frame.append( tmp );
+    frame.os << "\033[" << f.ds.get_cursor_row() + 1 << ';' << f.ds.get_cursor_col() + 1 << 'H';
     frame.cursor_x = f.ds.get_cursor_col();
     frame.cursor_y = f.ds.get_cursor_row();
   }
@@ -191,20 +187,20 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
   if ( (!initialized)
        || (f.ds.cursor_visible != frame.last_frame.ds.cursor_visible) ) {
     if ( f.ds.cursor_visible ) {
-      frame.append( "\033[?25h" );
+      frame.os << "\033[?25h";
     } else {
-      frame.append( "\033[?25l" );
+      frame.os << "\033[?25l";
     }
   }
 
   /* have renditions changed? */
   if ( (!initialized)
        || !(f.ds.get_renditions() == frame.current_rendition) ) {
-    frame.appendstring( f.ds.get_renditions().sgr() );
+    frame.os << f.ds.get_renditions().sgr();
     frame.current_rendition = f.ds.get_renditions();
   }
 
-  return frame.str;
+  return frame.os.str();
 }
 
 void Display::put_cell( bool initialized, FrameState &frame, const Framebuffer &f ) const
@@ -225,7 +221,7 @@ void Display::put_cell( bool initialized, FrameState &frame, const Framebuffer &
 
   if ( !(frame.current_rendition == cell->renditions) ) {
     /* print renditions */
-    frame.appendstring( cell->renditions.sgr() );
+    frame.os << cell->renditions.sgr();
     frame.current_rendition = cell->renditions;
   }
 
@@ -246,19 +242,18 @@ void Display::put_cell( bool initialized, FrameState &frame, const Framebuffer &
 
     /* can we go to the end of the line? */
     if ( frame.x + clear_count == f.ds.get_width() ) {
-      frame.append( "\033[K" );
+      frame.os << "\033[K";
       frame.x += clear_count;
     } else {
       if ( has_ech ) {
 	if ( clear_count == 1 ) {
-	  frame.append( "\033[X" );
+	  frame.os << "\033[X";
 	} else {
-	  snprintf( tmp, 64, "\033[%dX", clear_count );
-	  frame.append( tmp );
+	  frame.os << "\033[" << clear_count << 'X';
 	}
 	frame.x += clear_count;
       } else { /* no ECH, so just print a space */
-	frame.append( " " );
+	frame.os << ' ';
 	frame.cursor_x++;
 	frame.x++;
       }
@@ -269,14 +264,14 @@ void Display::put_cell( bool initialized, FrameState &frame, const Framebuffer &
 
   /* cells that begin with combining character get combiner attached to no-break space */
   if ( cell->fallback ) {
-    frame.append( "\xC2\xA0" );
+    frame.os << "\xC2\xA0";
   }
 
   for ( std::vector<wchar_t>::const_iterator i = cell->contents.begin();
 	i != cell->contents.end();
 	i++ ) {
     snprintf( tmp, 64, "%lc", *i );
-    frame.append( tmp );
+    frame.os << tmp;
   }
 
   frame.x += cell->width;
@@ -285,16 +280,13 @@ void Display::put_cell( bool initialized, FrameState &frame, const Framebuffer &
 
 void FrameState::append_silent_move( int y, int x )
 {
-  char tmp[ 64 ];
-
   /* turn off cursor if necessary before moving cursor */
   if ( last_frame.ds.cursor_visible ) {
-    append( "\033[?25l" );
+    os << "\033[?25l";
     last_frame.ds.cursor_visible = false;
   }
 
-  snprintf( tmp, 64, "\033[%d;%dH", y + 1, x + 1 );
-  append( tmp );
+  os << "\033[" << y + 1 << ';' << x + 1 << 'H';
   cursor_x = x;
   cursor_y = y;
 }
