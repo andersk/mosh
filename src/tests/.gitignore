@@ -1,2 +1,6 @@
 /ocb-aes
+/ocb-aes.log
+/ocb-aes.trs
 /encrypt-decrypt
+/encrypt-decrypt.log
+/encrypt-decrypt.trs
